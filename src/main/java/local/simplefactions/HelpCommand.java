@@ -87,33 +87,34 @@ public class HelpCommand implements CommandExecutor {
             lines.add("§f/f tnt siphon <amt|all> [r] §7- Pull TNT from dispensers");
             lines.add(" ");
             lines.add("§6SimpleEconomy");
+            lines.add("§f/bal §7- Check your balance");
             lines.add("§f/xpbottle <amount> §7- Convert XP to bottle");
             lines.add("§f/banknote <amount> §7- Create bank note (admin)");
             lines.add("§f/banknote give <player> <amount> §7- Give note (admin)");
         } else {
+            lines.add("§6Economy & Gambling");
+            lines.add("§f/bal §7- Check your balance");
+            lines.add("§f/cf <amount> §7- Create a 50/50 coin flip  §8|  §f/cf §7- View open flips");
+            lines.add("§f/xpbottle <amount> §7- Convert XP to bottle");
+            lines.add("§f/banknote <amount> §7- Redeem bank note (right-click)");
+            lines.add("§f/shop §7- Open the player shop");
+            lines.add(" ");
+            lines.add("§6Milestones & Events");
+            lines.add("§f/fund §7- View server milestones");
+            lines.add("§f/fund info <id> §7- Details on a milestone");
+            lines.add("§f/fund donate <id> <amount> §7- Donate toward a goal");
+            lines.add("§f/challenges §7- View active challenge leaderboard");
+            lines.add(" ");
             lines.add("§6SimpleKits");
-            lines.add("§f/gkits §7- Open gkits GUI");
-            lines.add("§f/gkit <kitname> §7- Claim unlocked gkit");
+            lines.add("§f/gkits §7- Open gkits GUI (unlocks when milestone reached!)");
+            lines.add("§f/gkit <kitname> §7- Claim gkit");
             lines.add("§f/kits §7- Open rank kits GUI");
-            lines.add("§f/spawner [open] §7- Mystery spawner");
-            lines.add("§f/gkitgem give <player> <kit|random> [amount] §7- Give gems (admin)");
-            lines.add("§f/gkitlock player <player> §7- Lock player's gkits (admin)");
-            lines.add("§f/gkitlock all §7- Lock all gkits for everyone (admin)");
-            lines.add("§f/gkitunlock player <player> <kit|all> §7- Unlock a gkit for a player (admin)");
-            lines.add("§f/gkitunlock all <kit> §7- Unlock a kit for all online players (admin)");
-            lines.add("§f/gkitlock all §7- Lock all gkits (admin)");
-            lines.add("§f/gkitlock player <name> §7- Lock player gkits (admin)");
+            lines.add("§f/spawner §7- Mystery spawner");
             lines.add(" ");
             lines.add("§6SimpleCrates");
-            lines.add("§f/crate give <player> <tier> [amount] §7- Give crate (admin)");
-            lines.add("§f/crate open <tier> §7- Open crate via command");
-            lines.add("§f/rankvoucher give <player> <rank> [amount] §7- Give rank voucher (admin)");
+            lines.add("§f/crate open <tier> §7- Open a crate");
             lines.add(" ");
-            lines.add("§6SimpleShop");
-            lines.add("§f/shop §7- Open shop GUI");
-            lines.add(" ");
-            lines.add("§6SimpleHUD");
-            lines.add("§7No commands. HUD updates automatically.");
+            lines.add("§7§oPage 1: General/Factions  Page 2: Claims/Factions  Page 3: Economy/Events");
         }
 
         for (String line : lines) {

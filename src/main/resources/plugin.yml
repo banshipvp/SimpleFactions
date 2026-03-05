@@ -42,6 +42,23 @@ commands:
     description: Join the priority queue for the Factions server
     usage: /queue [join|leave|list|pos]
     default: true
+  fund:
+    description: View and contribute to server milestones
+    usage: /fund [info|donate|add|remove|forceunlock|forcelock|reset]
+    default: true
+  helpadmin:
+    description: Admin command reference
+    usage: /helpadmin
+    permission: simplefactions.admin
+    default: op
+  challenges:
+    description: View the active challenge leaderboard
+    usage: /challenges
+    default: true
+  challenge:
+    description: Manage server challenges (admin start/end)
+    usage: /challenge [start <type>|end|info]
+    default: true
 
 permissions:
   simplefactions.sethub:

@@ -14,6 +14,8 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
     private PlayerRankManager playerRankManager;
     private HubQueueManager hubQueueManager;
     private SpawnerStackManager spawnerStackManager;
+    private MilestoneManager milestoneManager;
+    private ChallengeManager challengeManager;
     private BukkitTask autoSaveTask;
     private BukkitTask timeLockTask;
 
@@ -55,14 +57,32 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
         FactionAccessGui accessGui = new FactionAccessGui(factionManager);
 
         FCommand fCommand = new FCommand(factionManager, upgradeGUI, accessGui, economyManager);
+        fCommand.setWarzoneManager(warzoneManager);
         getCommand("f").setExecutor(fCommand);
         getCommand("f").setTabCompleter(fCommand);
         getCommand("help").setExecutor(new HelpCommand());
+        getCommand("helpadmin").setExecutor(new HelpAdminCommand());
+
+        // Milestones / /fund
+        milestoneManager = new MilestoneManager(getDataFolder());
+        FundCommand fundCmd = new FundCommand(milestoneManager, economyManager);
+        getCommand("fund").setExecutor(fundCmd);
+        getCommand("fund").setTabCompleter(fundCmd);
+
+        // Challenges
+        challengeManager = new ChallengeManager(economyManager);
+        ChallengeCommand challengeCmd = new ChallengeCommand(challengeManager);
+        getCommand("challenges").setExecutor(challengeCmd);
+        getCommand("challenges").setTabCompleter(challengeCmd);
+        getCommand("challenge").setExecutor(challengeCmd);
+        getCommand("challenge").setTabCompleter(challengeCmd);
+        Bukkit.getPluginManager().registerEvents(new ChallengeListener(challengeManager), this);
+
         Bukkit.getPluginManager().registerEvents(new ProtectionListener(factionManager, economyManager), this);
         Bukkit.getPluginManager().registerEvents(new TeleportProtectionListener(factionManager, warzoneManager), this);
         getServer().getPluginManager().registerEvents(new SpawnerStackListener(spawnerStackManager, factionManager), this);
         getServer().getPluginManager().registerEvents(new MobCombatListener(), this);
-        getServer().getPluginManager().registerEvents(new ClaimMapListener(), this);
+        getServer().getPluginManager().registerEvents(new ClaimMapListener(warzoneManager, economyManager), this);
         getServer().getPluginManager().registerEvents(new UpgradeListener(factionManager, upgradeGUI, economyManager), this);
         getServer().getPluginManager().registerEvents(new FactionWandListener(this, factionManager), this);
         getServer().getPluginManager().registerEvents(new FactionMapAutoListener(factionManager, fCommand), this);

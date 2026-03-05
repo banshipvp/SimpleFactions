@@ -62,4 +62,9 @@ public class EconomyManager {
         if (!enabled) return false;
         return economy.depositPlayer(player, amount).transactionSuccess();
     }
+
+    public boolean depositPlayer(OfflinePlayer player, double amount) {
+        if (!enabled) return false;
+        return economy.depositPlayer(player, amount).transactionSuccess();
+    }
 }

@@ -24,12 +24,32 @@ public class FCommand implements CommandExecutor, TabCompleter {
     private final UpgradeGUI upgradeGUI;
     private final FactionAccessGui accessGui;
     private final EconomyManager economyManager;
+    private WarzoneManager warzoneManager;
 
     public FCommand(FactionManager manager, UpgradeGUI upgradeGUI, FactionAccessGui accessGui, EconomyManager economyManager) {
         this.manager = manager;
         this.upgradeGUI = upgradeGUI;
         this.accessGui = accessGui;
         this.economyManager = economyManager;
+    }
+
+    /** Called by SimpleFactionsPlugin after both FCommand and WarzoneManager are ready. */
+    public void setWarzoneManager(WarzoneManager warzoneManager) {
+        this.warzoneManager = warzoneManager;
+    }
+
+    /**
+     * Returns the claiming cost (in dollars) based on proximity to warzone chunks:
+     *   1 chunk away (adjacent): $2,000,000
+     *   2 chunks away          : $1,000,000
+     *   further away           : $0 (free)
+     */
+    private long warzoneBorderCost(String world, int cx, int cz) {
+        if (warzoneManager == null) return 0;
+        int dist = warzoneManager.nearestWarzoneDistance(world, cx, cz, 2);
+        if (dist == 1) return 2_000_000L;
+        if (dist == 2) return 1_000_000L;
+        return 0;
     }
 
     @Override
@@ -684,9 +704,40 @@ public class FCommand implements CommandExecutor, TabCompleter {
 
             radius = Math.min(radius, 5);
 
+            // Pre-calculate total warzone border cost across all chunks to be claimed
+            long totalCost = 0;
+            boolean firstClaimForFaction = faction.getClaims().isEmpty();
+            for (int x = -radius; x <= radius; x++) {
+                for (int z = -radius; z <= radius; z++) {
+                    if (firstClaimForFaction && x == 0 && z == 0) continue;
+                    int cx = center.getX() + x, cz = center.getZ() + z;
+                    if (manager.getFactionByChunk(world.getName(), cx, cz) == null) {
+                        totalCost += warzoneBorderCost(world.getName(), cx, cz);
+                    }
+                }
+            }
+            if (!firstClaimForFaction || !faction.getClaims().isEmpty()) {
+                // also count center if it would be claimed normally
+                if (!firstClaimForFaction) {
+                    totalCost += warzoneBorderCost(world.getName(), center.getX(), center.getZ());
+                }
+            }
+
+            if (totalCost > 0) {
+                if (!economyManager.isEnabled()) {
+                    player.sendMessage("§cSome chunks in this radius border the warzone and require $" + formatMoney(totalCost) + " but economy is not available.");
+                    return;
+                }
+                if (!economyManager.has(player, totalCost)) {
+                    player.sendMessage("§cClaiming these chunks near the warzone costs §e$" + formatMoney(totalCost) + "§c. You don't have enough money.");
+                    return;
+                }
+                economyManager.withdrawPlayer(player, totalCost);
+                player.sendMessage("§6⚠ §ePaid §6$" + formatMoney(totalCost) + " §efor warzone-border chunks.");
+            }
+
             int claimed = 0;
 
-            boolean firstClaimForFaction = faction.getClaims().isEmpty();
             if (firstClaimForFaction) {
                 FactionManager.Faction centerOwner = manager.getFactionByChunk(world.getName(), center.getX(), center.getZ());
                 if (centerOwner != null) {
@@ -704,19 +755,11 @@ public class FCommand implements CommandExecutor, TabCompleter {
 
             for (int x = -radius; x <= radius; x++) {
                 for (int z = -radius; z <= radius; z++) {
-                    if (firstClaimForFaction && x == 0 && z == 0) {
-                        continue;
-                    }
-
+                    if (firstClaimForFaction && x == 0 && z == 0) continue;
                     if (manager.getFactionByChunk(world.getName(),
-                            center.getX() + x,
-                            center.getZ() + z) == null) {
-
-                        if (manager.claimChunk(faction,
-                                world.getName(),
-                                center.getX() + x,
-                                center.getZ() + z)) {
-
+                            center.getX() + x, center.getZ() + z) == null) {
+                        if (manager.claimChunk(faction, world.getName(),
+                                center.getX() + x, center.getZ() + z)) {
                             claimed++;
                         }
                     }
@@ -727,11 +770,33 @@ public class FCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
+        // ── Single chunk claim ────────────────────────────────────────────────
+        long cost = warzoneBorderCost(world.getName(), center.getX(), center.getZ());
+        if (cost > 0) {
+            if (!economyManager.isEnabled()) {
+                player.sendMessage("§cThis chunk borders the warzone and costs §e$" + formatMoney(cost) + "§c to claim, but economy is unavailable.");
+                return;
+            }
+            if (!economyManager.has(player, cost)) {
+                player.sendMessage("§cThis chunk borders the warzone and costs §e$" + formatMoney(cost) + "§c to claim. You don't have enough money.");
+                return;
+            }
+            economyManager.withdrawPlayer(player, cost);
+            player.sendMessage("§6⚠ §ePaid §6$" + formatMoney(cost) + " §efor this warzone-border chunk.");
+        }
+
         if (manager.claimChunk(faction, world.getName(), center.getX(), center.getZ())) {
             player.sendMessage("§aChunk claimed.");
         } else {
             player.sendMessage("§cCannot claim here.");
         }
+    }
+
+    private static String formatMoney(long amount) {
+        if (amount >= 1_000_000_000) return String.format("%.1fB", amount / 1_000_000_000.0);
+        if (amount >= 1_000_000)     return String.format("%.1fM", amount / 1_000_000.0);
+        if (amount >= 1_000)         return String.format("%.1fK", amount / 1_000.0);
+        return String.valueOf(amount);
     }
 
     private void handleUnclaim(Player player, String[] args) {

@@ -12,6 +12,16 @@ import java.util.UUID;
 
 public final class ClaimMapListener implements Listener {
 
+    private WarzoneManager warzoneManager;
+    private EconomyManager economyManager;
+
+    public ClaimMapListener() {}
+
+    public ClaimMapListener(WarzoneManager warzoneManager, EconomyManager economyManager) {
+        this.warzoneManager = warzoneManager;
+        this.economyManager = economyManager;
+    }
+
     @EventHandler
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player player)) return;
@@ -147,6 +157,33 @@ if (slot == ClaimMapGui.slot(4, 4)) { // South
         int claimed = 0;
         int blocked = 0;
 
+        // Pre-calculate warzone border cost
+        long totalCost = 0;
+        if (warzoneManager != null) {
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    if (session.manager.getFactionByChunk(world.getName(), x, z) != null) continue;
+                    int dist = warzoneManager.nearestWarzoneDistance(world.getName(), x, z, 2);
+                    if (dist == 1) totalCost += 2_000_000L;
+                    else if (dist == 2) totalCost += 1_000_000L;
+                }
+            }
+        }
+        if (totalCost > 0) {
+            if (economyManager == null || !economyManager.isEnabled()) {
+                player.sendMessage("§cSome selected chunks border the warzone and require $"
+                        + formatMoney(totalCost) + " but economy is unavailable.");
+                return;
+            }
+            if (!economyManager.has(player, totalCost)) {
+                player.sendMessage("§cClaiming these warzone-border chunks costs §e$"
+                        + formatMoney(totalCost) + "§c. You don't have enough money.");
+                return;
+            }
+            economyManager.withdrawPlayer(player, totalCost);
+            player.sendMessage("§6⚠ §ePaid §6$" + formatMoney(totalCost) + " §efor warzone-border chunks.");
+        }
+
         for (int x = minX; x <= maxX; x++) {
             for (int z = minZ; z <= maxZ; z++) {
                 // Skip if already claimed
@@ -184,5 +221,12 @@ if (slot == ClaimMapGui.slot(4, 4)) { // South
         int chunkZ = session.viewCenterZ + offsetZ;
 
         return new int[]{chunkX, chunkZ};
+    }
+
+    private static String formatMoney(long amount) {
+        if (amount >= 1_000_000_000) return String.format("%.1fB", amount / 1_000_000_000.0);
+        if (amount >= 1_000_000)     return String.format("%.1fM", amount / 1_000_000.0);
+        if (amount >= 1_000)         return String.format("%.1fK", amount / 1_000.0);
+        return String.valueOf(amount);
     }
 }

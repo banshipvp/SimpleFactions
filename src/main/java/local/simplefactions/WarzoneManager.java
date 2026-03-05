@@ -172,6 +172,43 @@ public class WarzoneManager {
         return world + ":" + cx + ":" + cz;
     }
 
+    /**
+     * Returns true if the given chunk (by chunk coordinates) is a WARZONE chunk,
+     * checking both the per-chunk map and any region-based zones.
+     */
+    public boolean isWarzoneChunk(String world, int cx, int cz) {
+        WarzoneType t = chunkTypes.get(chunkKey(world, cx, cz));
+        if (t == WarzoneType.WARZONE) return true;
+        // Check regions: chunk spans blocks [cx*16, cx*16+15] x [cz*16, cz*16+15]
+        int bx1 = cx * 16, bx2 = cx * 16 + 15;
+        int bz1 = cz * 16, bz2 = cz * 16 + 15;
+        for (ZoneRegion r : regions) {
+            if (r.world.equals(world) && r.type == WarzoneType.WARZONE
+                    && r.intersects(bx1, Integer.MIN_VALUE / 2, bz1,
+                                    bx2, Integer.MAX_VALUE / 2, bz2)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns the Chebyshev distance (in chunks) from chunk (cx,cz) to the
+     * nearest warzone chunk, searching up to {@code maxDist} away.
+     * Returns -1 if no warzone chunk is found within that range.
+     */
+    public int nearestWarzoneDistance(String world, int cx, int cz, int maxDist) {
+        for (int dist = 1; dist <= maxDist; dist++) {
+            for (int dx = -dist; dx <= dist; dx++) {
+                for (int dz = -dist; dz <= dist; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != dist) continue; // border ring only
+                    if (isWarzoneChunk(world, cx + dx, cz + dz)) return dist;
+                }
+            }
+        }
+        return -1;
+    }
+
     static class ZoneRegion {
         final String world;
         final int minX;
