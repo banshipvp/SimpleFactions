@@ -183,6 +183,27 @@ commands:
     usage: /roam
     permission: simplefactions.staff.roam
     default: op
+  envoy:
+    description: Manage envoys (start, edit loot, add loot)
+    usage: /envoy [start|nether|clear|edit <tier>|add <tier> <chance>]
+    permission: simplefactions.envoy.manage
+    default: op
+    aliases: [envoys]
+  envoyset:
+    description: Set envoy center location
+    usage: /envoyset <spawn|desert|plains|nether>
+    permission: simplefactions.envoy.manage
+    default: op
+  envoyedit:
+    description: Edit envoy loot table for a tier
+    usage: /envoyedit <tier>
+    permission: simplefactions.envoy.manage
+    default: op
+  envoyadd:
+    description: Add held item to envoy loot for a tier
+    usage: /envoyadd <tier> <chancePercent>
+    permission: simplefactions.envoy.manage
+    default: op
 
 permissions:
   simplefactions.sethub:

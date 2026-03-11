@@ -309,6 +309,9 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
             }
             String tierLabel = envoyManager.getTierLabel(envoy.tier());
             player.sendMessage("§aYou looted a " + tierLabel + " §achest at §f" + envoy.warpName() + "§a!");
+            
+            // Send title to player
+            player.sendTitle(tierLabel + " §aLooted!", "§7You collected " + rewards.size() + " items", 10, 40, 10);
 
             SimpleFactionsPlugin sf = SimpleFactionsPlugin.getInstance();
             if (sf != null && sf.getChallengeManager() != null) {
@@ -334,11 +337,15 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
             occupiedEnvoyChests.add(blockKey);
             openEnvoyBlocks.put(player.getUniqueId(), block);
 
-            String title = envoyManager.getTierLabel(envoy.tier()) + " §rChest";
+            String tierLabel = envoyManager.getTierLabel(envoy.tier());
+            String title = tierLabel + " §rChest";
             Inventory inv = Bukkit.createInventory(null, 27, title);
             for (ItemStack item : loot) {
                 if (item != null && !item.getType().name().equals("AIR")) inv.addItem(item);
             }
+            
+            // Send title when opening GUI
+            player.sendTitle("§6Opening Envoy", tierLabel, 10, 30, 10);
             player.openInventory(inv);
         }
     }
@@ -378,15 +385,25 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
         EnvoyManager.ActiveEnvoy envoy = envoyManager.getActiveEnvoy(block);
         if (envoy == null) return; // already destroyed
 
-        // Sync remaining items from GUI back to the ActiveEnvoy
+        // Count how many items the player took
         List<ItemStack> remaining = new ArrayList<>();
         for (ItemStack item : event.getInventory().getContents()) {
             if (item != null && !item.getType().name().equals("AIR")) remaining.add(item);
         }
+        
+        int originalItems = envoy.getLootItems().size();
+        int itemsTaken = originalItems - remaining.size();
+        
         if (remaining.isEmpty()) {
             envoyManager.openEnvoy(block); // cleanup hologram/fireworks/chest
+            String tierLabel = envoyManager.getTierLabel(envoy.tier());
+            player.sendTitle(tierLabel + " §aCleared!", "§7You took all " + originalItems + " items", 10, 40, 10);
         } else {
             envoy.setLootItems(remaining);
+            if (itemsTaken > 0) {
+                String tierLabel = envoyManager.getTierLabel(envoy.tier());
+                player.sendTitle("§6Envoy Looted", "§7You took " + itemsTaken + " item" + (itemsTaken == 1 ? "" : "s"), 5, 30, 5);
+            }
         }
     }
 

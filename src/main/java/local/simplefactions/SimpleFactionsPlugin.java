@@ -219,6 +219,19 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
         getCommand("roam").setTabCompleter(roamCommand);
         getServer().getPluginManager().registerEvents(roamCommand, this);
 
+        // Envoy system
+        envoyManager = new EnvoyManager(this);
+        EnvoyCommand envoyCommand = new EnvoyCommand(this, envoyManager);
+        getCommand("envoy").setExecutor(envoyCommand);
+        getCommand("envoy").setTabCompleter(envoyCommand);
+        getCommand("envoyset").setExecutor(envoyCommand);
+        getCommand("envoyset").setTabCompleter(envoyCommand);
+        getCommand("envoyedit").setExecutor(envoyCommand);
+        getCommand("envoyedit").setTabCompleter(envoyCommand);
+        getCommand("envoyadd").setExecutor(envoyCommand);
+        getCommand("envoyadd").setTabCompleter(envoyCommand);
+        getServer().getPluginManager().registerEvents(envoyCommand, this);
+
         timeLockTask = new WorldTimeLockTask(this).runTaskTimer(this, 0L, 100L);
 
         // ✅ Register the mod bridge

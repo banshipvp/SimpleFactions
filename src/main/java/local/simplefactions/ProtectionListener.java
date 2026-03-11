@@ -111,7 +111,13 @@ public class ProtectionListener implements Listener {
             Block b = event.getBlock();
 
             String spawnerType = resolveSpawnerEntityType(b);
-            double mineCost = SpawnerType.getBaseValue(spawnerType) * 0.10;
+            
+            // Get the stack size to calculate the proper mining cost
+            SpawnerStackManager ssm = manager.getSpawnerStackManager();
+            SpawnerStack stack = ssm != null ? ssm.getStack(b.getWorld().getName(), b.getX(), b.getY(), b.getZ()) : null;
+            int stackCount = stack != null ? stack.getCount() : 1;
+            
+            double mineCost = SpawnerType.getBaseValue(spawnerType) * 0.10 * stackCount;
 
             ItemStack tool = event.getPlayer().getInventory().getItemInMainHand();
             // Paper 1.21: Enchantment.SILK_TOUCH static constant is null – must use getByKey()
@@ -124,7 +130,6 @@ public class ProtectionListener implements Listener {
                 event.setCancelled(true);
                 b.setType(Material.AIR);
                 manager.onSpawnerRemoved(b.getWorld().getName(), b.getX(), b.getY(), b.getZ());
-                SpawnerStackManager ssm = manager.getSpawnerStackManager();
                 if (ssm != null) ssm.removeStack(b.getWorld().getName(), b.getX(), b.getY(), b.getZ());
                 return;
             }
