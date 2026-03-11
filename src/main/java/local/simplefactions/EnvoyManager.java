@@ -1,13 +1,20 @@
 package local.simplefactions;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Color;
+import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Firework;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.FireworkMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
@@ -53,24 +60,26 @@ public class EnvoyManager {
         private final String tier;
         private final String warpName;
         private final Location location;
+        private List<ItemStack> lootItems;
+        private Entity hologram;
+        private BukkitTask fireworkTask;
 
-        public ActiveEnvoy(String tier, String warpName, Location location) {
+        public ActiveEnvoy(String tier, String warpName, Location location, List<ItemStack> lootItems) {
             this.tier = tier;
             this.warpName = warpName;
             this.location = location == null ? null : location.clone();
+            this.lootItems = lootItems == null ? new ArrayList<>() : new ArrayList<>(lootItems);
         }
 
-        public String tier() {
-            return tier;
-        }
-
-        public String warpName() {
-            return warpName;
-        }
-
-        public Location location() {
-            return location == null ? null : location.clone();
-        }
+        public String tier() { return tier; }
+        public String warpName() { return warpName; }
+        public Location location() { return location == null ? null : location.clone(); }
+        public List<ItemStack> getLootItems() { return lootItems; }
+        public void setLootItems(List<ItemStack> items) { this.lootItems = new ArrayList<>(items); }
+        public Entity getHologram() { return hologram; }
+        public void setHologram(Entity hologram) { this.hologram = hologram; }
+        public BukkitTask getFireworkTask() { return fireworkTask; }
+        public void setFireworkTask(BukkitTask fireworkTask) { this.fireworkTask = fireworkTask; }
     }
 
     private final JavaPlugin plugin;
@@ -226,7 +235,11 @@ public class EnvoyManager {
 
     public void clearActiveEnvoys() {
         for (String key : new ArrayList<>(activeEnvoys.keySet())) {
-            activeEnvoys.remove(key);
+            ActiveEnvoy envoy = activeEnvoys.remove(key);
+            if (envoy != null) {
+                if (envoy.getHologram() != null) envoy.getHologram().remove();
+                if (envoy.getFireworkTask() != null) envoy.getFireworkTask().cancel();
+            }
             Block block = blockFromKey(key);
             if (block != null && block.getType() == Material.CHEST) {
                 block.setType(Material.AIR);
@@ -238,15 +251,18 @@ public class EnvoyManager {
         return activeEnvoys.get(blockKey(block));
     }
 
-    public ItemStack openEnvoy(Block block) {
+    public List<ItemStack> openEnvoy(Block block) {
         ActiveEnvoy envoy = activeEnvoys.remove(blockKey(block));
         if (envoy == null) return null;
+
+        if (envoy.getHologram() != null) envoy.getHologram().remove();
+        if (envoy.getFireworkTask() != null) envoy.getFireworkTask().cancel();
 
         if (block.getType() == Material.CHEST) {
             block.setType(Material.AIR);
         }
 
-        return rollReward(envoy.tier());
+        return new ArrayList<>(envoy.getLootItems());
     }
 
     private List<ActiveEnvoy> spawnAtCenter(String centerName, String tier) {
@@ -277,11 +293,27 @@ public class EnvoyManager {
             Block block = spawnLoc.getBlock();
             block.setType(Material.CHEST);
 
-            ActiveEnvoy envoy = new ActiveEnvoy(tier, centerName.toLowerCase(Locale.ROOT), block.getLocation());
+            // Pre-roll 3-5 loot items for this chest
+            int lootCount = 3 + random.nextInt(3);
+            List<ItemStack> lootItems = new ArrayList<>();
+            for (int i = 0; i < lootCount; i++) {
+                ItemStack item = rollReward(tier);
+                if (item != null) lootItems.add(item);
+            }
+
+            ActiveEnvoy envoy = new ActiveEnvoy(tier, centerName.toLowerCase(Locale.ROOT), block.getLocation(), lootItems);
             String key = blockKey(block);
             activeEnvoys.put(key, envoy);
             occupiedKeys.add(key);
             spawned.add(envoy);
+
+            // Spawn hologram above the chest
+            Entity hologram = spawnHologram(block.getLocation(), getTierLabel(tier));
+            envoy.setHologram(hologram);
+
+            // Start coloured firework task (fires every 200 ticks)
+            BukkitTask fireworkTask = startFireworkTask(block.getLocation(), tier);
+            envoy.setFireworkTask(fireworkTask);
         }
 
         return spawned;
@@ -546,6 +578,61 @@ public class EnvoyManager {
 
     private void ensureTier(String tier) {
         lootByTier.computeIfAbsent(normalizeTier(tier), ignored -> new ArrayList<>());
+    }
+
+    // ── Hologram & Fireworks ─────────────────────────────────────────────────────
+
+    public String getTierLabel(String tier) {
+        return switch (normalizeTier(tier)) {
+            case "simple"       -> "\u00a77\u00a7lSimple Envoy";
+            case "rare"         -> "\u00a7b\u00a7lRare Envoy";
+            case "legendary"    -> "\u00a76\u00a7lLegendary Envoy";
+            case "godly"        -> "\u00a75\u00a7lGodly Envoy";
+            case "heroic_nether"-> "\u00a7c\u00a7lHeroic Envoy";
+            default             -> "\u00a7f\u00a7lEnvoy";
+        };
+    }
+
+    private Entity spawnHologram(Location chestLoc, String label) {
+        Location loc = chestLoc.clone().add(0.5, 2.5, 0.5);
+        ArmorStand as = (ArmorStand) loc.getWorld().spawnEntity(loc, EntityType.ARMOR_STAND);
+        as.setCustomName(label);
+        as.setCustomNameVisible(true);
+        as.setInvisible(true);
+        as.setGravity(false);
+        as.setInvulnerable(true);
+        as.setSilent(true);
+        as.setMarker(true);
+        as.addScoreboardTag("envoy_hologram");
+        return as;
+    }
+
+    private BukkitTask startFireworkTask(Location chestLoc, String tier) {
+        Color color = getTierFireworkColor(tier);
+        Location fwLoc = chestLoc.clone().add(0.5, 1.0, 0.5);
+        return Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (fwLoc.getWorld() == null) return;
+            Firework fw = (Firework) fwLoc.getWorld().spawnEntity(fwLoc, EntityType.FIREWORK_ROCKET);
+            FireworkMeta meta = fw.getFireworkMeta();
+            meta.addEffect(FireworkEffect.builder()
+                    .withColor(color)
+                    .with(FireworkEffect.Type.BURST)
+                    .trail(false).flicker(false)
+                    .build());
+            meta.setPower(0);
+            fw.setFireworkMeta(meta);
+            Bukkit.getScheduler().runTaskLater(plugin, fw::detonate, 2L);
+        }, 200L, 200L);
+    }
+
+    private Color getTierFireworkColor(String tier) {
+        return switch (normalizeTier(tier)) {
+            case "rare"          -> Color.AQUA;
+            case "legendary"     -> Color.ORANGE;
+            case "godly"         -> Color.PURPLE;
+            case "heroic_nether" -> Color.RED;
+            default              -> Color.WHITE;
+        };
     }
 
     private String normalizeCenterName(String centerName) {

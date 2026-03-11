@@ -12,6 +12,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
@@ -21,9 +22,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
@@ -32,6 +35,13 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
     private final EnvoyManager envoyManager;
 
     private final Map<UUID, String> openEditors = new HashMap<>();
+
+    /** Tracks which players currently have an envoy chest GUI open (playerUUID → block key). */
+    private final Map<UUID, Block> openEnvoyBlocks = new HashMap<>();
+    /** Block keys of envoy chests currently being looted (prevents two players opening same chest). */
+    private final Set<String> occupiedEnvoyChests = new HashSet<>();
+    /** Title prefix used to identify envoy chest GUI inventories. */
+    private static final String ENVOY_GUI_TITLE_PREFIX = "\u00a7Envoy Chest: ";
 
     public EnvoyCommand(JavaPlugin plugin, EnvoyManager envoyManager) {
         this.plugin = plugin;
@@ -232,8 +242,6 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
 
     @EventHandler
     public void onInteractEnvoy(PlayerInteractEvent event) {
-        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) return;
-
         Block block = event.getClickedBlock();
         if (block == null || block.getType() != Material.CHEST) return;
 
@@ -242,28 +250,98 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
 
         event.setCancelled(true);
         Player player = event.getPlayer();
-        ItemStack reward = envoyManager.openEnvoy(block);
 
-        if (reward == null) {
-            player.sendMessage("§cThis envoy had no configured loot.");
-            return;
+        if (event.getAction() == Action.LEFT_CLICK_BLOCK) {
+            // Left-click: collect all items directly into inventory
+            List<ItemStack> rewards = envoyManager.openEnvoy(block);
+            if (rewards == null || rewards.isEmpty()) {
+                player.sendMessage("§cThis envoy chest was empty.");
+                return;
+            }
+            for (ItemStack item : rewards) {
+                Map<Integer, ItemStack> left = player.getInventory().addItem(item);
+                left.values().forEach(drop -> player.getWorld().dropItemNaturally(player.getLocation(), drop));
+            }
+            String tierLabel = envoyManager.getTierLabel(envoy.tier());
+            player.sendMessage("§aYou looted a " + tierLabel + " §achest at §f" + envoy.warpName() + "§a!");
+
+            SimpleFactionsPlugin sf = SimpleFactionsPlugin.getInstance();
+            if (sf != null && sf.getChallengeManager() != null) {
+                sf.getChallengeManager().increment(
+                        player.getUniqueId(),
+                        player.getName(),
+                        ChallengeManager.TrackerType.ENVOY_OPEN,
+                        1L
+                );
+            }
+        } else if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            // Right-click: open inventory GUI
+            String blockKey = blockKey(block);
+            if (occupiedEnvoyChests.contains(blockKey)) {
+                player.sendMessage("§cAnother player is looting this chest - wait your turn!");
+                return;
+            }
+            List<ItemStack> loot = envoy.getLootItems();
+            if (loot.isEmpty()) {
+                player.sendMessage("§cThis envoy chest is empty.");
+                return;
+            }
+            occupiedEnvoyChests.add(blockKey);
+            openEnvoyBlocks.put(player.getUniqueId(), block);
+
+            String title = envoyManager.getTierLabel(envoy.tier()) + " §rChest";
+            Inventory inv = Bukkit.createInventory(null, 27, title);
+            for (ItemStack item : loot) {
+                if (item != null && !item.getType().name().equals("AIR")) inv.addItem(item);
+            }
+            player.openInventory(inv);
         }
+    }
 
-        Map<Integer, ItemStack> left = player.getInventory().addItem(reward);
-        if (!left.isEmpty()) {
-            left.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+    @EventHandler
+    public void onEnvoyInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        Block block = openEnvoyBlocks.get(player.getUniqueId());
+        if (block == null) return;
+
+        event.setCancelled(true);
+        // Only allow taking from the top (envoy) inventory
+        if (event.getClickedInventory() == null
+                || event.getClickedInventory() != event.getView().getTopInventory()) return;
+
+        ItemStack clicked = event.getCurrentItem();
+        if (clicked == null || clicked.getType() == Material.AIR) return;
+
+        Map<Integer, ItemStack> leftover = player.getInventory().addItem(clicked.clone());
+        if (leftover.isEmpty()) {
+            event.getView().getTopInventory().setItem(event.getSlot(), null);
+        } else {
+            player.sendMessage("§cInventory full!");
         }
+        player.updateInventory();
+    }
 
-        player.sendMessage("§aYou opened a §f" + envoy.tier() + " §aenvoy at §f" + envoy.warpName() + "§a.");
+    @EventHandler
+    public void onEnvoyInventoryClose(InventoryCloseEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) return;
+        Block block = openEnvoyBlocks.remove(player.getUniqueId());
+        if (block == null) return;
 
-        SimpleFactionsPlugin sf = SimpleFactionsPlugin.getInstance();
-        if (sf != null && sf.getChallengeManager() != null) {
-            sf.getChallengeManager().increment(
-                    player.getUniqueId(),
-                    player.getName(),
-                    ChallengeManager.TrackerType.ENVOY_OPEN,
-                    1L
-            );
+        String blockKey = blockKey(block);
+        occupiedEnvoyChests.remove(blockKey);
+
+        EnvoyManager.ActiveEnvoy envoy = envoyManager.getActiveEnvoy(block);
+        if (envoy == null) return; // already destroyed
+
+        // Sync remaining items from GUI back to the ActiveEnvoy
+        List<ItemStack> remaining = new ArrayList<>();
+        for (ItemStack item : event.getInventory().getContents()) {
+            if (item != null && !item.getType().name().equals("AIR")) remaining.add(item);
+        }
+        if (remaining.isEmpty()) {
+            envoyManager.openEnvoy(block); // cleanup hologram/fireworks/chest
+        } else {
+            envoy.setLootItems(remaining);
         }
     }
 
@@ -313,6 +391,10 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
                 || sender.hasPermission("group.admin")
                 || sender.hasPermission("group.dev")
                 || sender.isOp();
+    }
+
+    private String blockKey(Block block) {
+        return block.getWorld().getName() + ":" + block.getX() + ":" + block.getY() + ":" + block.getZ();
     }
 
     private String formatLocation(org.bukkit.Location location) {
