@@ -285,7 +285,7 @@ public class EnvoyManager {
         int maxAttempts = Math.max(chestTarget * 10, 100);
 
         while (spawned.size() < chestTarget && attempts++ < maxAttempts) {
-            Location spawnLoc = findSpawnLocation(base, spawned.isEmpty(), occupiedKeys);
+            Location spawnLoc = findSpawnLocation(base, occupiedKeys);
             if (spawnLoc == null || spawnLoc.getWorld() == null) {
                 continue;
             }
@@ -339,7 +339,7 @@ public class EnvoyManager {
         return random.nextInt((max - min) + 1) + min;
     }
 
-    private Location findSpawnLocation(Location center, boolean allowCenterFirst, Set<String> occupiedKeys) {
+    private Location findSpawnLocation(Location center, Set<String> occupiedKeys) {
         if (center == null || center.getWorld() == null) {
             return null;
         }
@@ -349,19 +349,13 @@ public class EnvoyManager {
         int cy = center.getBlockY();
         int cz = center.getBlockZ();
 
-        if (allowCenterFirst) {
-            Block centerBlock = resolveChestBlock(world, cx, cy, cz);
-            if (centerBlock != null) {
-                String key = blockKey(centerBlock);
-                if (!occupiedKeys.contains(key)) {
-                    return centerBlock.getLocation();
-                }
-            }
-        }
-
-        for (int i = 0; i < 16; i++) {
-            int dx = random.nextInt(25) - 12;
-            int dz = random.nextInt(25) - 12;
+        // Spawn chests 10–120 blocks from center (min distance enforced, max 120).
+        // Height is capped at y=130 inside resolveChestBlock.
+        for (int i = 0; i < 40; i++) {
+            double angle = random.nextDouble() * 2 * Math.PI;
+            int dist = 10 + random.nextInt(111); // inclusive range [10, 120]
+            int dx = (int) Math.round(Math.cos(angle) * dist);
+            int dz = (int) Math.round(Math.sin(angle) * dist);
             Block block = resolveChestBlock(world, cx + dx, cy, cz + dz);
             if (block == null) {
                 continue;
