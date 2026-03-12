@@ -1,14 +1,26 @@
-# Hub location is written by /sethub under the "hub" section.
+# Proxy settings
+proxy:
+  # The server name registered in Velocity/BungeeCord that /hub sends players to.
+  hub-server: "lobby"
 
-hub-command-lock:
-  # Fallback world for command lock if /sethub has not been set yet.
-  world: "hub"
+# Scheduled reboot settings
+reboot:
+  # Auto-reboot interval in minutes. Set to 0 to disable.
+  interval: 720
+  # How long before the reboot to broadcast warnings.
+  alert-times:
+    - 10m
+    - 5m
+    - 1m
+    - 30s
+    - 10s
+    - 5s
+    - 4s
+    - 3s
+    - 2s
+    - 1s
 
 time-lock:
-  # Hub is permanently night.
-  hub-world: "hub"
-  hub-time: 18000
-
   # Factions worlds are permanently day.
   faction-worlds:
     - "faction_spawn"

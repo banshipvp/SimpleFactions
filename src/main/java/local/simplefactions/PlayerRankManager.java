@@ -64,6 +64,24 @@ public class PlayerRankManager {
         return getRank(player.getUniqueId());
     }
 
+    /**
+     * Rank check used during PlayerLoginEvent (player not yet online).
+     * Checks local overrides first, then queries LuckPerms by UUID.
+     */
+    public PlayerRank getRankAtLogin(java.util.UUID playerId) {
+        PlayerRank override = overrides.get(playerId);
+        if (override != null) return override;
+        try {
+            var lp = net.luckperms.api.LuckPermsProvider.get();
+            var user = lp.getUserManager().getUser(playerId);
+            if (user != null) {
+                PlayerRank r = PlayerRank.fromGroupId(user.getPrimaryGroup());
+                if (r != null) return r;
+            }
+        } catch (Throwable ignored) {}
+        return PlayerRank.DEFAULT;
+    }
+
     /** Returns rank from LuckPerms primary group, or null if unavailable. */
     private PlayerRank getRankFromLuckPerms(Player player) {
         try {

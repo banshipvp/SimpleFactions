@@ -1,88 +1,46 @@
 package local.simplefactions;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Location;
-import org.bukkit.World;
+import com.google.common.io.ByteArrayDataOutput;
+import com.google.common.io.ByteStreams;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
+/**
+ * /hub – sends the player to the Hub server via Velocity/BungeeCord plugin messaging.
+ * The target server name is read from config: proxy.hub-server (default: "hub").
+ */
 public class HubCommand implements CommandExecutor {
+
+    private static final String BUNGEE_CHANNEL = "BungeeCord";
 
     private final JavaPlugin plugin;
 
     public HubCommand(JavaPlugin plugin) {
         this.plugin = plugin;
+        // Register the outgoing channel so plugin messages can be sent
+        plugin.getServer().getMessenger().registerOutgoingPluginChannel(plugin, BUNGEE_CHANNEL);
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (command.getName().equalsIgnoreCase("sethub")) {
-            if (!(sender instanceof Player player)) {
-                sender.sendMessage("§cOnly players can use /sethub.");
-                return true;
-            }
-            if (!player.hasPermission("simplefactions.sethub")) {
-                player.sendMessage("§cYou don't have permission to set the hub.");
-                return true;
-            }
-            saveHubLocation(player.getLocation());
-            player.sendMessage("§aHub location set!");
-            return true;
-        }
-
-        // /hub
         if (!(sender instanceof Player player)) {
-            sender.sendMessage("§cOnly players can use /hub.");
+            sender.sendMessage("\u00a7cOnly players can use /hub.");
             return true;
         }
 
-        Location hub = getHubLocation();
-        if (hub == null) {
-            player.sendMessage("§cHub has not been set yet. An admin must run /sethub.");
-            return true;
-        }
-
-        player.teleport(hub);
-        player.sendMessage("§aWelcome to the Hub!");
+        String hubServer = plugin.getConfig().getString("proxy.hub-server", "lobby");
+        sendToServer(player, hubServer);
+        player.sendMessage("\u00a7eSending you to the \u00a76Hub\u00a7e...");
         return true;
     }
 
-    public void saveHubLocation(Location loc) {
-        FileConfiguration config = plugin.getConfig();
-        config.set("hub.world",  loc.getWorld().getName());
-        config.set("hub.x",     loc.getX());
-        config.set("hub.y",     loc.getY());
-        config.set("hub.z",     loc.getZ());
-        config.set("hub.yaw",   loc.getYaw());
-        config.set("hub.pitch", loc.getPitch());
-        plugin.saveConfig();
-    }
-
-    public Location getHubLocation() {
-        FileConfiguration config = plugin.getConfig();
-        if (config.contains("hub.world")) {
-            World world = Bukkit.getWorld(config.getString("hub.world"));
-            if (world != null) {
-                return new Location(world,
-                        config.getDouble("hub.x"),
-                        config.getDouble("hub.y"),
-                        config.getDouble("hub.z"),
-                        (float) config.getDouble("hub.yaw"),
-                        (float) config.getDouble("hub.pitch"));
-            }
-        }
-
-        String fallbackWorldName = config.getString("worlds.hub",
-                config.getString("hub-command-lock.world", "hub"));
-        World fallbackWorld = Bukkit.getWorld(fallbackWorldName);
-        if (fallbackWorld == null) {
-            return null;
-        }
-        Location spawn = fallbackWorld.getSpawnLocation();
-        return spawn.clone().add(0.5, 0.0, 0.5);
+    private void sendToServer(Player player, String serverName) {
+        ByteArrayDataOutput out = ByteStreams.newDataOutput();
+        out.writeUTF("Connect");
+        out.writeUTF(serverName);
+        player.sendPluginMessage(plugin, BUNGEE_CHANNEL, out.toByteArray());
     }
 }

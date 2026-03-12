@@ -28,6 +28,8 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
     private EnvoyManager envoyManager;
     private RoamCommand roamCommand;
     private TeleportTimerManager teleportTimerManager;
+    private ScheduledRebootManager rebootManager;
+    private ServerLockCommand serverLockCommand;
     private BukkitTask autoSaveTask;
     private BukkitTask timeLockTask;
 
@@ -206,12 +208,19 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(vaultCommand, this);
         getServer().getPluginManager().registerEvents(warpCommand, this);
 
-        // Hub
+        // Hub – sends players to the Hub server via Velocity proxy
         HubCommand hubCommand = new HubCommand(this);
         getCommand("hub").setExecutor(hubCommand);
-        getCommand("sethub").setExecutor(hubCommand);
-        getServer().getPluginManager().registerEvents(new HubJoinListener(this, hubCommand), this);
-        getServer().getPluginManager().registerEvents(new HubCommandRestrictionListener(this, hubCommand, hubQueueManager, playerRankManager), this);
+        // Rescue players whose saved location is still in the old hub world
+        getServer().getPluginManager().registerEvents(new HubJoinListener(this), this);
+
+        // Server lock and scheduled reboot
+        rebootManager = new ScheduledRebootManager(this);
+        rebootManager.start();
+        serverLockCommand = new ServerLockCommand(this, playerRankManager, rebootManager);
+        getCommand("serverclose").setExecutor(serverLockCommand);
+        getCommand("serveropen").setExecutor(serverLockCommand);
+        getServer().getPluginManager().registerEvents(serverLockCommand, this);
 
         // Roam command
         roamCommand = new RoamCommand(this);
@@ -221,6 +230,8 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
 
         // Envoy system
         envoyManager = new EnvoyManager(this);
+        envoyManager.load();
+        envoyManager.startAutoSpawnScheduler();
         EnvoyCommand envoyCommand = new EnvoyCommand(this, envoyManager);
         getCommand("envoy").setExecutor(envoyCommand);
         getCommand("envoy").setTabCompleter(envoyCommand);
@@ -276,6 +287,10 @@ public final class SimpleFactionsPlugin extends JavaPlugin {
 
         if (hubQueueManager != null) {
             hubQueueManager.stop();
+        }
+
+        if (rebootManager != null) {
+            rebootManager.stop();
         }
 
         if (spawnerStackManager != null) {

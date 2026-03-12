@@ -12,13 +12,18 @@ commands:
     usage: /help [page]
     aliases: [shelp, serverhelp]
   hub:
-    description: Teleport to the hub
+    description: Connect to the Hub server
     usage: /hub
     default: true
-  sethub:
-    description: Set the hub spawn point
-    usage: /sethub
-    permission: simplefactions.sethub
+  serverclose:
+    description: Close the server to non-staff players and send them to the hub
+    usage: /serverclose
+    permission: simplefactions.admin
+    default: op
+  serveropen:
+    description: Open the server to all players
+    usage: /serveropen
+    permission: simplefactions.admin
     default: op
   warzone:
     description: Manage warzone/safezone chunk claims

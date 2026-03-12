@@ -11,6 +11,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
@@ -282,6 +283,41 @@ public class EnvoyCommand implements CommandExecutor, TabCompleter, Listener {
                 player.sendMessage("§aRemoved loot entry from §f" + tier + "§a.");
                 Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, tier));
             }
+        }
+    }
+
+    @EventHandler
+    public void onBreakEnvoy(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        if (block.getType() != Material.CHEST) return;
+
+        EnvoyManager.ActiveEnvoy envoy = envoyManager.getActiveEnvoy(block);
+        if (envoy == null) return;
+
+        event.setCancelled(true); // don't drop a chest item
+        Player player = event.getPlayer();
+
+        List<ItemStack> rewards = envoyManager.openEnvoy(block);
+        if (rewards == null || rewards.isEmpty()) {
+            player.sendMessage("\u00a7cThis envoy chest was already empty.");
+            return;
+        }
+        for (ItemStack item : rewards) {
+            Map<Integer, ItemStack> left = player.getInventory().addItem(item);
+            left.values().forEach(drop -> player.getWorld().dropItemNaturally(player.getLocation(), drop));
+        }
+        String tierLabel = envoyManager.getTierLabel(envoy.tier());
+        player.sendMessage("\u00a7aYou looted a " + tierLabel + " \u00a7achest at \u00a7f" + envoy.warpName() + "\u00a7a!");
+        player.sendTitle(tierLabel + " \u00a7aLooted!", "\u00a77You collected " + rewards.size() + " items", 10, 40, 10);
+
+        SimpleFactionsPlugin sf = SimpleFactionsPlugin.getInstance();
+        if (sf != null && sf.getChallengeManager() != null) {
+            sf.getChallengeManager().increment(
+                    player.getUniqueId(),
+                    player.getName(),
+                    ChallengeManager.TrackerType.ENVOY_OPEN,
+                    1L
+            );
         }
     }
 
